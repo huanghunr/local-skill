@@ -41,11 +41,24 @@ nix search nixpkgs#<pkgname>
 ### Trying a Package Temporarily
 
 ```bash
-nix-shell -p <pkgname>                          # stable channel
-nix-shell -p <pkgname1> <pkgname2>              # multiple packages
+nix-shell -p <pkgname>                          # single package, stable channel
+nix-shell -p <pkg1> <pkg2> <pkg3>               # multiple packages
 nix shell nixpkgs/nixos-unstable#<pkgname>      # try unstable version
+nix-shell shell.nix                              # complex env from file
 nix develop                                      # flake-based dev shell (from current dir)
 ```
+
+For complex temporary environments (multiple packages, env vars, build hooks, CTF toolkits), create a `shell.nix` with `pkgs.mkShell`:
+
+```nix
+{ pkgs ? import <nixpkgs> {} }:
+pkgs.mkShell {
+  buildInputs = with pkgs; [ python3 nodejs gcc ];
+  shellHook = ''echo "Ready" && export FOO=bar'';
+}
+```
+
+See `references/nix_tips.md` > "Installing Packages (Temporary / Try-out)" for full `mkShell` examples including CTF environments, unstable pinning, and flake-based dev shells.
 
 ### Getting the Latest Version (Unstable Channel)
 

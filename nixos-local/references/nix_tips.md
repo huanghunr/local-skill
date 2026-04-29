@@ -15,6 +15,8 @@ nix search nixpkgs#<pkgname>
 
 ## Installing Packages (Temporary / Try-out)
 
+### Quick One-liners
+
 ```bash
 # Try a package temporarily (shell session only)
 nix-shell -p <pkgname>
@@ -22,10 +24,125 @@ nix-shell -p <pkgname>
 # Try with unstable packages
 nix-shell -I nixpkgs=https://github.com/NixOS/nixpkgs/archive/nixos-unstable.tar.gz -p <pkgname>
 
+# Multiple packages at once
+nix-shell -p python3 nodejs gcc
+
 # Enter a development shell from a shell.nix file
 nix-shell
 nix develop  # for flakes
 ```
+
+### Creating Complex Temporary Environments with shell.nix
+
+When you need more than just a few packages — specific library versions, environment variables, build hooks, or complex setups — create a `shell.nix` file.
+
+**Basic shell.nix structure:**
+
+```nix
+{ pkgs ? import <nixpkgs> {} }:
+
+pkgs.mkShell {
+  # Packages available in the shell
+  buildInputs = with pkgs; [
+    python312
+    nodejs_22
+    gcc
+    pkg-config
+    openssl
+  ];
+
+  # Environment variables set on shell entry
+  shellHook = ''
+    echo "Development environment ready"
+    export PYTHONPATH="$PWD:$PYTHONPATH"
+    export DATABASE_URL="postgresql://localhost/mydb"
+  '';
+}
+```
+
+**More complex examples:**
+
+```nix
+{ pkgs ? import <nixpkgs> {} }:
+
+pkgs.mkShell {
+  name = "my-ctf-env";
+
+  buildInputs = with pkgs; [
+    # Languages / runtimes
+    python312
+    python312Packages.pwntools
+    python312Packages.requests
+
+    # Reverse engineering
+    gdb
+    pwndbg
+    radare2
+    ghidra
+
+    # Crypto / forensics
+    binutils
+    xxd
+    foremost
+    volatility3
+
+    # Networking
+    wireshark
+    nmap
+    netcat
+  ];
+
+  # Set useful environment variables
+  shellHook = ''
+    echo "CTF environment loaded"
+    export PS1="[CTF] $PS1"
+
+    # Common Python imports for pwntools
+    alias solve='python3 solve.py'
+  '';
+}
+```
+
+**Using a specific nixpkgs version in shell.nix (pin to unstable):**
+
+```nix
+{ pkgs ? import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/nixos-unstable.tar.gz") {} }:
+
+pkgs.mkShell {
+  buildInputs = with pkgs; [
+    # latest versions from unstable
+    neovim
+    rustup
+  ];
+}
+```
+
+**Flake-based equivalent (flake.nix):**
+
+```nix
+{
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+
+  outputs = { self, nixpkgs }: let
+    system = "x86_64-linux";
+    pkgs = nixpkgs.legacyPackages.${system};
+  in {
+    devShells.${system}.default = pkgs.mkShell {
+      buildInputs = with pkgs; [ python3 nodejs ];
+      shellHook = "echo 'Dev shell ready'";
+    };
+  };
+}
+```
+
+Then enter with `nix develop`.
+
+**Key mkShell features:**
+- `buildInputs` — packages/libraries available in the shell PATH
+- `nativeBuildInputs` — build-time tools (compilers, cmake, etc.)
+- `shellHook` — bash script run on shell entry
+- `packages` — alternative to buildInputs (newer style)
+- `LD_LIBRARY_PATH` — automatically set by Nix; no need to manually configure
 
 ## Using Unstable (Latest) Packages
 
