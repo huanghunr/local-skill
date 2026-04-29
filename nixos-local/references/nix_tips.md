@@ -27,6 +27,200 @@ nix-shell
 nix develop  # for flakes
 ```
 
+## Using Unstable (Latest) Packages
+
+This system has `unstablepkgs` as a flake input (`nixos-unstable` branch). It is imported as `upkgs` and available in all config modules.
+
+### Try an Unstable Package in Shell
+
+```bash
+# Method 1: Using the flake input directly
+nix shell nixpkgs/nixos-unstable#<pkgname>
+
+# Method 2: Using nixpkgs with unstable tarball
+nix-shell -I nixpkgs=https://github.com/NixOS/nixpkgs/archive/nixos-unstable.tar.gz -p <pkgname>
+
+# Method 3: Build and run (flake-based)
+nix run nixpkgs/nixos-unstable#<pkgname>
+
+# Method 4: Enter a dev shell with unstable channel
+nix develop nixpkgs/nixos-unstable#<pkgname>
+```
+
+### Add Unstable Package to Config Permanently
+
+The `upkgs` variable is passed via `specialArgs` in the flake. Use it in config files:
+
+```nix
+# In /etc/nixos/home/home.nix (home.packages) or /etc/nixos/nixos/configuration.nix (environment.systemPackages):
+{ upkgs, ... }:
+{
+  # Add to the packages list:
+  environment.systemPackages = with pkgs; [
+    some-stable-pkg
+  ] ++ (with upkgs; [
+    some-latest-pkg    # this one comes from unstable
+  ]);
+}
+```
+
+For home-manager packages:
+```nix
+{ upkgs, ... }:
+{
+  home.packages = with pkgs; [
+    stable-tool
+  ] ++ (with upkgs; [
+    latest-tool        # from unstable
+  ]);
+}
+```
+
+### Override a Single Package with Unstable Version
+
+If you need a specific package from unstable without pulling in its unstable dependencies (risky):
+
+```nix
+{ pkgs, upkgs, ... }:
+{
+  environment.systemPackages = with pkgs; [
+    # Use unstable version of a package, still linking against stable libs
+    (upkgs.some-pkg.override { /* optional overrides */ })
+  ];
+}
+```
+
+**Note**: Mixing stable and unstable packages can cause dependency conflicts. If a package from `upkgs` fails to build, try using all its dependencies from `upkgs` too, or build a custom derivation (see below).
+
+## Building Custom Packages (Writing Nix Derivations)
+
+When a package is not in nixpkgs, or you need a custom build, write a Nix derivation.
+
+### Quick: Build from a Flake
+
+Create a `flake.nix` in a project directory:
+
+```nix
+{
+  description = "Custom package build";
+
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
+
+  outputs = { self, nixpkgs }: let
+    system = "x86_64-linux";
+    pkgs = nixpkgs.legacyPackages.${system};
+  in {
+    packages.${system}.default = pkgs.stdenv.mkDerivation {
+      pname = "my-tool";
+      version = "1.0.0";
+
+      src = pkgs.fetchFromGitHub {
+        owner = "some-owner";
+        repo = "some-repo";
+        rev = "v1.0.0";
+        sha256 = "";  # nix will tell you the hash on first build
+      };
+
+      buildInputs = with pkgs; [ cmake pkg-config ];
+
+      # For Go/Rust projects, use buildGoModule/buildRustPackage instead
+    };
+  };
+}
+```
+
+Build it:
+```bash
+nix build    # builds and symlinks ./result
+nix run      # builds and runs
+```
+
+### Simple Derivation for a Script or Binary
+
+```nix
+{ pkgs ? import <nixpkgs> {} }:
+
+pkgs.stdenv.mkDerivation {
+  pname = "my-script";
+  version = "0.1";
+
+  src = ./.;  # local source directory
+
+  installPhase = ''
+    mkdir -p $out/bin
+    cp my-script.sh $out/bin/my-script
+    chmod +x $out/bin/my-script
+  '';
+}
+```
+
+Save as `default.nix`, then:
+```bash
+nix-build          # build
+nix-shell          # enter environment
+```
+
+### Override an Existing Package (Custom Build Flags / Patches)
+
+```nix
+{ pkgs ? import <nixpkgs> {} }:
+
+pkgs.some-package.overrideAttrs (oldAttrs: {
+  # Change version/source
+  version = "newer-version";
+  src = pkgs.fetchFromGitHub { /* ... */ };
+
+  # Add build flags
+  buildInputs = oldAttrs.buildInputs ++ [ pkgs.some-extra-lib ];
+
+  # Apply a patch
+  patches = (oldAttrs.patches or []) ++ [ ./my-fix.patch ];
+
+  # Add extra cmake/meson flags
+  cmakeFlags = (oldAttrs.cmakeFlags or []) ++ [ "-DENABLE_FEATURE=ON" ];
+})
+```
+
+Build: `nix-build -E 'with import <nixpkgs> {}; callPackage ./override.nix {}'`
+
+### Language-Specific Build Helpers
+
+Nixpkgs provides helpers for common ecosystems:
+
+```nix
+# Python
+python3Packages.buildPythonApplication { /* ... */ }
+
+# Go
+buildGoModule {
+  vendorHash = "";  # nix will tell you
+  /* ... */
+}
+
+# Rust
+rustPlatform.buildRustPackage {
+  cargoHash = "";   # nix will tell you
+  /* ... */
+}
+
+# Node.js
+buildNpmPackage {
+  npmDepsHash = ""; # nix will tell you
+  /* ... */
+}
+```
+
+### Getting the Hash Right
+
+On first build, use a dummy hash and nix will report the expected one:
+
+```bash
+# Set hash to empty or lib.fakeSha256, build, and nix will error with the correct hash
+nix build 2>&1 | grep "got:" | head -1
+# or
+nix-build 2>&1 | grep "got:" | head -1
+```
+
 ## Adding Packages to System Configuration
 
 Packages are managed declaratively. To add packages:

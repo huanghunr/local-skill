@@ -41,10 +41,21 @@ nix search nixpkgs#<pkgname>
 ### Trying a Package Temporarily
 
 ```bash
-nix-shell -p <pkgname>                    # stable channel
-nix-shell -p <pkgname1> <pkgname2>        # multiple packages
-nix develop                                # flake-based dev shell (from current dir)
+nix-shell -p <pkgname>                          # stable channel
+nix-shell -p <pkgname1> <pkgname2>              # multiple packages
+nix shell nixpkgs/nixos-unstable#<pkgname>      # try unstable version
+nix develop                                      # flake-based dev shell (from current dir)
 ```
+
+### Getting the Latest Version (Unstable Channel)
+
+This system has `unstablepkgs` (`nixos-unstable`) as a flake input, imported as `upkgs`. When you need the bleeding-edge version of a tool:
+
+- **Try in shell**: `nix shell nixpkgs/nixos-unstable#<pkgname>`
+- **Add to config**: Use `upkgs.<name>` in `configuration.nix` or `home.nix` — e.g. `(with upkgs; [ <pkgname> ])`
+- **Caveat**: Mixing stable/unstable can cause dependency conflicts. If a build fails, use all unstable deps or write a custom derivation.
+
+See `references/nix_tips.md` > "Using Unstable (Latest) Packages" for full details.
 
 ### Adding a Package Permanently
 
@@ -53,6 +64,20 @@ User packages go in `/etc/nixos/home/home.nix` under `home.packages`.
 For unstable packages, use `upkgs.<name>` — the `upkgs` variable is passed via `specialArgs`.
 
 After editing the config, run: `sudo nixos-rebuild switch --flake /etc/nixos#nixos`
+
+### Building a Package from Source
+
+When a package is not in nixpkgs or needs custom build flags, write a Nix derivation:
+
+```bash
+# Quick: use mkDerivation in a flake or default.nix
+nix build   # build and symlink ./result
+nix run     # build and execute
+```
+
+Language-specific helpers are available: `buildGoModule`, `buildRustPackage`, `buildPythonApplication`, `buildNpmPackage`.
+
+See `references/nix_tips.md` > "Building Custom Packages" for derivations, overrides, and hash handling.
 
 ### Installing via Flatpak
 
