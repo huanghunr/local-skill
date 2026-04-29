@@ -60,45 +60,29 @@ pkgs.mkShell {
 }
 ```
 
-**More complex examples:**
+**More complex template (use comments as placeholders):**
 
 ```nix
 { pkgs ? import <nixpkgs> {} }:
 
 pkgs.mkShell {
-  name = "my-ctf-env";
+  name = "my-env";
 
   buildInputs = with pkgs; [
     # Languages / runtimes
-    python312
-    python312Packages.pwntools
-    python312Packages.requests
+    # python3 python3Packages.<lib>
+    # nodejs
+    # gcc pkg-config
 
-    # Reverse engineering
-    gdb
-    pwndbg
-    radare2
-    ghidra
-
-    # Crypto / forensics
-    binutils
-    xxd
-    foremost
-    volatility3
-
-    # Networking
-    wireshark
-    nmap
-    netcat
+    # Domain-specific tools (replace with what you need)
+    # <tool-name>
   ];
 
-  # Set useful environment variables
   shellHook = ''
-    echo "CTF environment loaded"
-    export PS1="[CTF] $PS1"
-
-    # Common Python imports for pwntools
-    alias solve='python3 solve.py'
+    echo "Environment ready"
+    export PS1="[ENV] $PS1"
+    # export FOO=bar
+    # alias cmd='...'
   '';
 }
 ```
